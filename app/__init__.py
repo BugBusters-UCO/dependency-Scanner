@@ -1,0 +1,1 @@
+"""Dependency scanner FastAPI application."""

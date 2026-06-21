@@ -1,0 +1,36 @@
+name: Dependency Scan
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  dependency-scan:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Start dependency scanner
+        run: |
+          docker build -t dependency-scanner .
+          docker run -d --name dependency-scanner \
+            -p 8001:8001 \
+            -e SCANNER_WORKSPACE_ROOT=/workspace \
+            -v "$PWD:/workspace" \
+            dependency-scanner
+
+      - name: Run scan
+        run: |
+          curl -fsS -X POST "http://127.0.0.1:8001/api/v1/scans" \
+            -H "Content-Type: application/json" \
+            -d '{"project_path":"/workspace","include_dev":true,"use_osv":true,"fail_on":"high"}' \
+            | tee dependency-scan-report.json
+
+      - name: Upload scan report
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-scan-report
+          path: dependency-scan-report.json
