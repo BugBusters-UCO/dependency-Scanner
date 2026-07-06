@@ -114,27 +114,34 @@ def analyze_blast_radius(
     return sorted(chains, key=lambda item: SEVERITY_ORDER[item.severity], reverse=True)[:50]
 
 
-def _source_files(project_path: Path) -> list[Path]:
-    files: list[Path] = []
+def _source_files(project_path: Path) -> list[tuple[Path, str]]:
+    files: list[tuple[Path, str]] = []
     for path in project_path.rglob("*"):
         if any(part in SKIP_DIRS for part in path.parts):
             continue
         if path.is_file() and path.suffix.lower() in SOURCE_SUFFIXES:
-            files.append(path)
-    return files[:2000]
+            try:
+                text = path.read_text(encoding="utf-8", errors="ignore")
+                files.append((path, text))
+            except OSError:
+                continue
+            if len(files) >= 2000:
+                break
+    return files
 
 
-def _find_dependency_usage(project_path: Path, source_files: list[Path], dep: Dependency) -> list[dict]:
+def _find_dependency_usage(project_path: Path, source_files: list[tuple[Path, str]], dep: Dependency) -> list[dict]:
     patterns = _dependency_patterns(dep)
     if not patterns:
         return []
 
+    quick_match_str = dep.name.split("/")[-1].split(":")[-1]
+
     usage: list[dict] = []
-    for path in source_files:
-        try:
-            text = path.read_text(encoding="utf-8", errors="ignore")
-        except OSError:
+    for path, text in source_files:
+        if quick_match_str not in text:
             continue
+
         import_match = _first_matching_line(text, patterns)
         if not import_match:
             continue

@@ -1,4 +1,5 @@
 from __future__ import annotations
+import asyncio
 
 from collections.abc import Iterable
 
@@ -35,15 +36,29 @@ class OSVClient:
             for dep in pinned
         ]
 
-        async with httpx.AsyncClient(timeout=self.timeout_seconds) as client:
-            response = await client.post(OSV_BATCH_URL, json={"queries": queries})
+        findings: list[VulnerabilityFinding] = []
+        batch_size = 100
+
+        async def fetch_batch(client: httpx.AsyncClient, batch_queries: list[dict], batch_pinned: list[Dependency]) -> None:
+            response = await client.post(OSV_BATCH_URL, json={"queries": batch_queries})
             response.raise_for_status()
             payload = response.json()
+            for dep, result in zip(batch_pinned, payload.get("results", []), strict=False):
+                for vuln in result.get("vulns", []):
+                    findings.append(_to_finding(dep, vuln))
 
-        findings: list[VulnerabilityFinding] = []
-        for dep, result in zip(pinned, payload.get("results", []), strict=False):
-            for vuln in result.get("vulns", []):
-                findings.append(_to_finding(dep, vuln))
+        async with httpx.AsyncClient(timeout=self.timeout_seconds) as client:
+            tasks = []
+            for i in range(0, len(queries), batch_size):
+                batch_queries = queries[i : i + batch_size]
+                batch_pinned = pinned[i : i + batch_size]
+                tasks.append(fetch_batch(client, batch_queries, batch_pinned))
+            
+            # Run concurrently in chunks of 5 to avoid overwhelming the OSV API
+            concurrency = 5
+            for i in range(0, len(tasks), concurrency):
+                await asyncio.gather(*tasks[i:i+concurrency])
+
         return findings
 
 
