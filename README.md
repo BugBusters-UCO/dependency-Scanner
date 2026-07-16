@@ -72,3 +72,13 @@ uvicorn app.main:app --host 0.0.0.0 --port 8001
 ```
 
 `ci_status` in the response is `passed` or `failed` based on the configured `fail_on` severity.
+
+## Internal service authentication
+
+Set `SCANNER_API_TOKEN` on both the scanner and the main backend to require the
+`X-Scanner-Token` header for scan requests. Leave it unset only for local
+development. Configure `SCANNER_ALLOWED_ORIGINS` with a comma-separated
+allowlist rather than exposing the scanner with wildcard CORS.
+
+For the enterprise deployment and Redis worker model, see the repository-level
+`ENTERPRISE_DEPLOYMENT.md`.

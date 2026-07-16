@@ -13,6 +13,7 @@ from app.schemas.scan import (
     VulnerabilityFinding,
 )
 from app.services.osv_client import SEVERITY_ORDER
+from app.services.ast_reachability import find_python_dependency_usage
 
 
 SOURCE_SUFFIXES = {
@@ -108,6 +109,8 @@ def analyze_blast_radius(
                     description="Prioritize this dependency because it is used near sensitive banking code. Upgrade, pin, sandbox, or replace it before lower-impact packages.",
                     auto_remediable=False,
                 ),
+                reachability_confidence=max(float(item.get("confidence", 0.5)) for item in usage),
+                analysis_method=",".join(sorted({item.get("analysis", "regex-fallback") for item in usage})),
             )
         )
 
@@ -139,6 +142,10 @@ def _find_dependency_usage(project_path: Path, source_files: list[tuple[Path, st
 
     usage: list[dict] = []
     for path, text in source_files:
+        ast_usage = find_python_dependency_usage(project_path, path, text, dep)
+        if ast_usage:
+            usage.append(ast_usage)
+            continue
         if quick_match_str not in text:
             continue
 
@@ -161,6 +168,8 @@ def _find_dependency_usage(project_path: Path, source_files: list[tuple[Path, st
                 "import_aliases": import_match["aliases"],
                 "sensitive_lines": sensitive_lines[:5],
                 "routes": routes[:5],
+                "analysis": "regex-fallback",
+                "confidence": 0.55,
             }
         )
     return usage

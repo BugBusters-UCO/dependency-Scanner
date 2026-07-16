@@ -18,6 +18,7 @@ class ScanRequest(BaseModel):
     use_osv: bool = Field(default=True, description="Query OSV for known vulnerabilities.")
     fail_on: Severity = Field(default=Severity.high, description="CI fails at or above this severity.")
     max_depth: int = Field(default=8, ge=1, le=20, description="Maximum directory depth for manifest discovery.")
+    sandbox: bool = Field(default=False, description="Request execution in the separately managed hardened sandbox.")
 
 
 class Dependency(BaseModel):
@@ -82,6 +83,45 @@ class CapabilityFinding(BaseModel):
     fix: FixSuggestion
 
 
+class StaticMalwareFinding(BaseModel):
+    id: str
+    rule_id: str
+    severity: Severity
+    title: str
+    description: str
+    file_path: str
+    line_number: int | None = None
+    evidence: str | None = None
+    source: str
+    confidence: float = Field(ge=0, le=1)
+    fix: FixSuggestion
+
+
+class BehaviorFinding(BaseModel):
+    id: str
+    rule_id: str
+    severity: Severity
+    title: str
+    description: str
+    evidence: dict
+    confidence: float = Field(ge=0, le=1)
+    fix: FixSuggestion
+
+
+class PackageIntelligenceFinding(BaseModel):
+    id: str
+    rule_id: str
+    package_name: str
+    version: str | None = None
+    ecosystem: str
+    severity: Severity
+    title: str
+    description: str
+    manifest_path: str
+    evidence: dict = Field(default_factory=dict)
+    fix: FixSuggestion
+
+
 class NamespaceRiskFinding(BaseModel):
     id: str
     severity: Severity
@@ -97,6 +137,7 @@ class NamespaceRiskFinding(BaseModel):
 
 class ExposureScore(BaseModel):
     score: int
+    policy_version: str = "banking-v1"
     action: Literal["block", "expedite", "watch", "track"]
     exploit_likelihood: int
     static_exploitability: int
@@ -131,6 +172,8 @@ class RiskChainFinding(BaseModel):
     evidence: list[str] = Field(default_factory=list)
     exposure: ExposureScore | None = None
     fix: FixSuggestion
+    reachability_confidence: float = Field(default=0.5, ge=0, le=1)
+    analysis_method: str = "regex-fallback"
 
 
 class ScanSummary(BaseModel):
@@ -149,6 +192,14 @@ class ScanSummary(BaseModel):
     fail_on: Severity
 
 
+class ArtifactMetadata(BaseModel):
+    artifact_sha256: str
+    git_revision: str | None = None
+    manifest_count: int
+    manifests: list[dict]
+    integrity: str
+
+
 class ScanResponse(BaseModel):
     scan_id: str
     project_path: str
@@ -157,6 +208,16 @@ class ScanResponse(BaseModel):
     findings: list[VulnerabilityFinding]
     dependency_risks: list[DependencyRiskFinding] = Field(default_factory=list)
     capability_findings: list[CapabilityFinding] = Field(default_factory=list)
+    static_malware_findings: list[StaticMalwareFinding] = Field(default_factory=list)
+    static_malware_status: dict = Field(default_factory=dict)
+    behavior_findings: list[BehaviorFinding] = Field(default_factory=list)
+    behavior_status: dict = Field(default_factory=dict)
+    package_intelligence_findings: list[PackageIntelligenceFinding] = Field(default_factory=list)
+    package_intelligence_status: dict = Field(default_factory=dict)
     namespace_risks: list[NamespaceRiskFinding] = Field(default_factory=list)
     risk_chains: list[RiskChainFinding] = Field(default_factory=list)
     summary: ScanSummary
+    artifact: ArtifactMetadata
+    sandbox: dict = Field(default_factory=dict)
+    advisory_status: str = "offline_no_external_advisory_lookup"
+    data_isolation: dict = Field(default_factory=dict)
