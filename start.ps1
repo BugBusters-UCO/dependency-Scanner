@@ -37,4 +37,4 @@ if ($InstalledHash.Trim() -ne $RequirementsHash) {
 
 Write-Host "Starting Dependency Scanner Backend on http://127.0.0.1:$Port"
 Write-Host "API docs: http://127.0.0.1:$Port/docs"
-& $VenvPython -m uvicorn app.main:app --host 127.0.0.1 --port $Port --reload
+& $VenvPython -m uvicorn app.main:app --host 127.0.0.1 --port $Port --env-file .env --reload
