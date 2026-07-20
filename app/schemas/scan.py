@@ -21,6 +21,12 @@ class ScanRequest(BaseModel):
     sandbox: bool = Field(default=False, description="Request execution in the separately managed hardened sandbox.")
 
 
+class SinglePackageScanRequest(BaseModel):
+    name: str = Field(..., description="Package name")
+    version: str | None = Field(default=None, description="Package version")
+    ecosystem: str = Field(default="npm", description="Package ecosystem (npm, pypi, etc)")
+
+
 class Dependency(BaseModel):
     name: str
     version: str | None = None
@@ -221,3 +227,9 @@ class ScanResponse(BaseModel):
     sandbox: dict = Field(default_factory=dict)
     advisory_status: str = "offline_no_external_advisory_lookup"
     data_isolation: dict = Field(default_factory=dict)
+
+
+class SinglePackageScanResponse(BaseModel):
+    isMalicious: bool
+    findings: list[VulnerabilityFinding]
+

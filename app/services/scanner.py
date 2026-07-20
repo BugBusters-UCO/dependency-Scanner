@@ -15,6 +15,8 @@ from app.schemas.scan import (
     NamespaceRiskFinding,
     ScanRequest,
     ScanResponse,
+    SinglePackageScanRequest,
+    SinglePackageScanResponse,
     ScanSummary,
     Severity,
     DependencyRiskFinding,
@@ -45,6 +47,25 @@ class ScanError(Exception):
 class DependencyScanner:
     def __init__(self) -> None:
         self.osv_client = OSVClient()
+
+    async def scan_single(self, request: SinglePackageScanRequest) -> SinglePackageScanResponse:
+        dep = Dependency(name=request.name, version=request.version, ecosystem=request.ecosystem, manifest_path="proxy")
+        try:
+            findings = await self.osv_client.query([dep])
+        except httpx.HTTPError as exc:
+            raise ScanError(f"OSV vulnerability lookup failed: {exc}") from exc
+        
+        is_malicious = False
+        if findings:
+            for finding in findings:
+                if SEVERITY_ORDER.get(finding.severity, 0) >= SEVERITY_ORDER.get(Severity.high, 0):
+                    is_malicious = True
+                    break
+
+        return SinglePackageScanResponse(
+            isMalicious=is_malicious,
+            findings=sorted(findings, key=lambda item: SEVERITY_ORDER[item.severity], reverse=True)
+        )
 
     async def scan(self, request: ScanRequest) -> ScanResponse:
         validate_startup_policy()
