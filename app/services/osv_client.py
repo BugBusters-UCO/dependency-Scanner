@@ -1,10 +1,13 @@
-from __future__ import annotations
+`from __future__ import annotations
 import os
 import asyncio
 import json
 from pathlib import Path
+import logging
 
 from collections.abc import Iterable
+
+logger = logging.getLogger(__name__)
 
 import httpx
 
@@ -43,6 +46,7 @@ class OSVClient:
         local_findings = self._query_local(pinned)
         if self.mode in {"manual", "internal", "offline"} or self.offline or not self.allow_external:
             self.last_status = "local_snapshot" if self._local_exists() else "local_snapshot_missing"
+            logger.info(f"OSVClient is in offline/manual mode (mode={self.mode}, offline={self.offline}). Returning {len(local_findings)} local findings. Status: {self.last_status}")
             return local_findings
 
         queries = [
@@ -65,15 +69,18 @@ class OSVClient:
                     findings.append(_to_finding(dep, vuln))
 
         try:
+            logger.info(f"OSVClient querying external batch API for {len(pinned)} dependencies...")
             async with httpx.AsyncClient(timeout=self.timeout_seconds) as client:
                 tasks = []
                 for i in range(0, len(queries), batch_size):
                     tasks.append(fetch_batch(client, queries[i : i + batch_size], pinned[i : i + batch_size]))
                 for i in range(0, len(tasks), 5): await asyncio.gather(*tasks[i:i+5])
             self.last_status = "osv_auto"
+            logger.info(f"OSVClient external batch API returned {len(findings)} findings.")
             return findings
-        except httpx.HTTPError:
+        except httpx.HTTPError as exc:
             self.last_status = "osv_auto_failed_using_local_snapshot" if self._local_exists() else "osv_auto_failed_no_local_snapshot"
+            logger.error(f"OSVClient HTTPError querying external API: {exc}. Returning {len(local_findings)} local findings.")
             return local_findings
 
     def _local_exists(self) -> bool:
